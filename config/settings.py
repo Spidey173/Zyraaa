@@ -202,22 +202,38 @@ if IS_TESTING:
     }
     CELERY_TASK_ALWAYS_EAGER = True
 else:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
-            "LOCATION": os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0'),
+    REDIS_URL = os.environ.get('REDIS_URL')
+    if REDIS_URL:
+        CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": REDIS_URL,
+            }
         }
-    }
-    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-    SESSION_CACHE_ALIAS = "default"
-    CHANNEL_LAYERS = {
-        'default': {
-            'BACKEND': 'channels_redis.core.RedisChannelLayer',
-            'CONFIG': {
-                "hosts": [os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')],
+        SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+        SESSION_CACHE_ALIAS = "default"
+        CHANNEL_LAYERS = {
+            'default': {
+                'BACKEND': 'channels_redis.core.RedisChannelLayer',
+                'CONFIG': {
+                    "hosts": [REDIS_URL],
+                },
             },
-        },
-    }
+        }
+    else:
+        # Fallback to local memory cache and database sessions if Redis is not configured in production
+        CACHES = {
+            "default": {
+                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                "LOCATION": "zyra-production-fallback-cache",
+            }
+        }
+        SESSION_ENGINE = "django.contrib.sessions.backends.db"
+        CHANNEL_LAYERS = {
+            "default": {
+                "BACKEND": "channels.layers.InMemoryChannelLayer",
+            },
+        }
 
 # Celery Configuration
 CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
