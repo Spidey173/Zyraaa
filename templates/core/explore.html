@@ -1,0 +1,171 @@
+{% extends 'core/base.html' %}
+{% block title %}Explore - Zyra{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-9">
+        <!-- Search bar -->
+        <div class="glass-card mb-4 text-center">
+            <h3 class="text-white fw-bold mb-3"><i class="bi bi-compass text-purple me-2"></i>Explore Zyra</h3>
+            <form method="GET" action="{% url 'explore' %}" class="d-flex">
+                <input type="text" name="q" value="{{ query }}" class="form-control form-control-custom me-2" placeholder="Search profiles, captions, hashtags..." style="border-radius: 12px 0 0 12px;">
+                <button type="submit" class="btn btn-grad" style="border-radius: 0 12px 12px 0; padding: 12px 28px;">
+                    <i class="bi bi-search"></i>
+                </button>
+            </form>
+            {% if query %}
+                <div class="mt-3 text-start">
+                    <a href="{% url 'explore' %}" class="text-decoration-none text-purple small">
+                        <i class="bi bi-x-circle me-1"></i> Clear Search
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+
+        {% if query %}
+            <!-- Search Results Section -->
+            <div class="search-results-section">
+                <h4 class="text-white fw-bold mb-3"><i class="bi bi-people me-2 text-cyan"></i>Matching Profiles</h4>
+                <div class="row">
+                    {% for profile_user in users_results %}
+                        <div class="col-md-6 mb-3">
+                            <div class="d-flex align-items-center user-result-card justify-content-between">
+                                <div class="d-flex align-items-center">
+                                    <a href="{% url 'user_profile' username=profile_user.username %}">
+                                        {% if profile_user.profile.profile_pic %}
+                                            <img src="{{ profile_user.profile.profile_pic.url }}" alt="Profile" class="user-result-avatar">
+                                        {% else %}
+                                            <div class="user-result-avatar d-flex align-items-center justify-content-center text-white fw-bold" style="background: var(--primary-grad); font-size: 1.2rem;">
+                                                {{ profile_user.username|slice:":1"|upper }}
+                                            </div>
+                                        {% endif %}
+                                    </a>
+                                    <div class="user-result-info">
+                                        <a href="{% url 'user_profile' username=profile_user.username %}" class="user-result-username">
+                                            {{ profile_user.username }}
+                                        </a>
+                                        <p class="text-muted small mb-0">{{ profile_user.profile.bio|truncatechars:50|default:"No bio yet" }}</p>
+                                    </div>
+                                </div>
+                                
+                                <form method="POST" action="{% url 'follow_user' username=profile_user.username %}" class="follow-ajax-form">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm {% if profile_user.is_followed_by_user %}btn-outline-custom{% else %}btn-grad{% endif %} px-3" data-username="{{ profile_user.username }}">
+                                        {% if profile_user.is_followed_by_user %}Following{% else %}Follow{% endif %}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="col-12">
+                            <p class="text-muted">No matching profiles found.</p>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="search-results-section mt-4">
+                <h4 class="text-white fw-bold mb-3"><i class="bi bi-images me-2 text-warning"></i>Matching Posts</h4>
+                {% if posts %}
+                    <div class="explore-grid">
+                        {% for post in posts %}
+                            <a href="{% url 'post_detail' post_id=post.id %}" class="explore-item">
+                                {% if post.video %}
+                                    <video src="{{ post.video.url }}" class="explore-image" autoplay loop muted playsinline></video>
+                                    <i class="bi bi-play-btn-fill text-white position-absolute" style="top: 12px; right: 12px; font-size: 1.25rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 2;"></i>
+                                {% elif post.image %}
+                                    <img src="{{ post.image.url }}" alt="Post image" class="explore-image">
+                                {% else %}
+                                    <div class="w-100 h-100 d-flex align-items-center justify-content-center p-3 text-white-50 text-center" style="background: #1a162b;">
+                                        <span>{{ post.caption|truncatechars:60 }}</span>
+                                    </div>
+                                {% endif %}
+                                <div class="explore-overlay">
+                                    <div class="explore-overlay-item">
+                                        <i class="bi bi-heart-fill text-danger"></i>
+                                        <span class="likes-count">{{ post.likes_count }}</span>
+                                    </div>
+                                    <div class="explore-overlay-item">
+                                        <i class="bi bi-chat-fill text-white"></i>
+                                        <span>{{ post.comments_count }}</span>
+                                    </div>
+                                </div>
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">No matching posts found.</p>
+                {% endif %}
+            </div>
+
+        {% else %}
+            <!-- Discover Gallery (No search query) -->
+            <h4 class="text-white fw-bold mb-3"><i class="bi bi-grid-3x3-gap text-cyan me-2"></i>Trending Feed</h4>
+            <div class="explore-grid mb-5">
+                {% for post in posts %}
+                    <a href="{% url 'post_detail' post_id=post.id %}" class="explore-item">
+                        {% if post.video %}
+                            <video src="{{ post.video.url }}" class="explore-image" autoplay loop muted playsinline></video>
+                            <i class="bi bi-play-btn-fill text-white position-absolute" style="top: 12px; right: 12px; font-size: 1.25rem; text-shadow: 0 2px 4px rgba(0,0,0,0.5); z-index: 2;"></i>
+                        {% elif post.image %}
+                            <img src="{{ post.image.url }}" alt="Post image" class="explore-image">
+                        {% else %}
+                            <div class="w-100 h-100 d-flex align-items-center justify-content-center p-3 text-white-50 text-center" style="background: #1a162b; border: 1px solid var(--border-color);">
+                                <span>{{ post.caption|truncatechars:60 }}</span>
+                            </div>
+                        {% endif %}
+                        <div class="explore-overlay">
+                            <div class="explore-overlay-item">
+                                <i class="bi bi-heart-fill text-danger"></i>
+                                <span>{{ post.likes_count }}</span>
+                            </div>
+                            <div class="explore-overlay-item">
+                                <i class="bi bi-chat-fill text-white"></i>
+                                <span>{{ post.comments_count }}</span>
+                            </div>
+                        </div>
+                    </a>
+                {% empty %}
+                    <div class="col-12 text-center py-5">
+                        <i class="bi bi-images fs-1 text-muted mb-3 d-block"></i>
+                        <h5 class="text-white">No Posts Available Yet</h5>
+                        <p class="text-muted">Publish the first post to bring Zyra to life!</p>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Ajax Follow Button Handler for Search Page
+    document.querySelectorAll('.follow-ajax-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const button = this.querySelector('button[type="submit"]');
+            const url = this.getAttribute('action');
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.following) {
+                    button.textContent = 'Following';
+                    button.className = 'btn btn-sm btn-outline-custom px-3';
+                } else {
+                    button.textContent = 'Follow';
+                    button.className = 'btn btn-sm btn-grad px-3';
+                }
+            })
+            .catch(error => console.error('Error during AJAX follow:', error));
+        });
+    });
+});
+</script>
+{% endblock %}

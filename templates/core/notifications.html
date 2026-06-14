@@ -1,0 +1,106 @@
+{% extends 'core/base.html' %}
+{% block title %}Activity - Zyra{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="glass-card" style="background-color: #121212; border: 1px solid #262626; border-radius: 12px; padding: 24px;">
+            <h4 class="text-white fw-bold mb-4"><i class="bi bi-heart-fill text-danger me-2"></i>Notifications</h4>
+            
+            <div class="notifications-list">
+                {% for notification in notifications %}
+                    <div class="d-flex align-items-center justify-content-between py-3 border-bottom border-dark">
+                        <div class="d-flex align-items-center">
+                            <a href="{% url 'user_profile' username=notification.sender.username %}" class="text-decoration-none">
+                                {% if notification.sender.profile.profile_pic %}
+                                    <img src="{{ notification.sender.profile.profile_pic.url }}" alt="Profile" class="rounded-circle me-3" style="width: 44px; height: 44px; object-fit: cover; border: 1px solid #262626;">
+                                {% else %}
+                                    <div class="rounded-circle me-3 text-white fw-bold d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; font-size: 1.1rem; background: var(--instagram-grad);">
+                                        {{ notification.sender.username|slice:":1"|upper }}
+                                    </div>
+                                {% endif %}
+                            </a>
+                            <div>
+                                <span class="text-white small">
+                                    <a href="{% url 'user_profile' username=notification.sender.username %}" class="fw-bold text-white text-decoration-none me-1">
+                                        {{ notification.sender.username }}
+                                    </a>
+                                    {% if notification.notification_type == 'like' %}
+                                        liked your post.
+                                    {% elif notification.notification_type == 'comment' %}
+                                        commented: "{{ notification.post.comments.last.content|truncatechars:30 }}"
+                                    {% elif notification.notification_type == 'follow' %}
+                                        started following you.
+                                    {% endif %}
+                                </span>
+                                <div class="text-muted" style="font-size: 0.75rem; margin-top: 2px;">{{ notification.created_at|timesince }} ago</div>
+                            </div>
+                        </div>
+
+                        <!-- Right-side preview thumbnail or Follow Action button -->
+                        <div>
+                            {% if notification.notification_type == 'follow' %}
+                                <form method="POST" action="{% url 'follow_user' username=notification.sender.username %}" class="follow-ajax-form">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-grad px-3">Follow Back</button>
+                                </form>
+                            {% elif notification.post %}
+                                <a href="{% url 'post_detail' post_id=notification.post.id %}">
+                                    {% if notification.post.image %}
+                                        <img src="{{ notification.post.image.url }}" alt="Post Preview" class="rounded" style="width: 40px; height: 40px; object-fit: cover;">
+                                    {% elif notification.post.video %}
+                                        <div class="bg-black rounded d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                            <i class="bi bi-play-fill text-white small"></i>
+                                        </div>
+                                    {% else %}
+                                        <div class="bg-dark rounded d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; font-size: 0.7rem; color: #fff;">
+                                            Text
+                                        </div>
+                                    {% endif %}
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% empty %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="bi bi-bell-slash fs-1 d-block mb-3"></i>
+                        <h5>No Activity Yet</h5>
+                        <p class="small">When someone likes, comments, or follows you, you'll see it here.</p>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Ajax Follow Button Handler for Notifications
+    document.querySelectorAll('.follow-ajax-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const button = this.querySelector('button');
+            const url = this.getAttribute('action');
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.following) {
+                    button.textContent = 'Following';
+                    button.className = 'btn btn-sm btn-outline-custom px-3';
+                } else {
+                    button.textContent = 'Follow';
+                    button.className = 'btn btn-sm btn-grad px-3';
+                }
+            });
+        });
+    });
+});
+</script>
+{% endblock %}

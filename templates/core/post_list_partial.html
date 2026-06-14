@@ -1,0 +1,112 @@
+{% for post in posts %}
+    <div class="glass-card post-card" data-post-id="{{ post.id }}" style="background-color: #121212; border: 1px solid #262626; border-radius: 8px; margin-bottom: 24px; padding: 16px;">
+        <!-- Post Header -->
+        <div class="post-header d-flex align-items-center justify-content-between mb-3">
+            <div class="d-flex align-items-center">
+                <a href="{% url 'user_profile' username=post.user.username %}" class="text-decoration-none">
+                    {% if post.user.profile.profile_pic %}
+                        <img src="{{ post.user.profile.profile_pic.url }}" alt="Avatar" class="post-avatar" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid #fff;">
+                    {% else %}
+                        <div class="post-avatar d-flex align-items-center justify-content-center text-white fw-bold" style="width: 32px; height: 32px; border-radius: 50%; background: var(--instagram-grad); font-size: 0.9rem; line-height: 1;">
+                            {{ post.user.username|slice:":1"|upper }}
+                        </div>
+                    {% endif %}
+                </a>
+                <div class="ms-2">
+                    <a href="{% url 'user_profile' username=post.user.username %}" class="post-author-name fw-bold text-white text-decoration-none" style="font-size: 0.9rem;">
+                        {{ post.user.username }}
+                    </a>
+                    <span class="text-muted" style="font-size: 0.75rem; margin-left: 6px;">• {{ post.created_at|timesince }} ago</span>
+                </div>
+            </div>
+            {% if request.user == post.user %}
+                <div class="dropdown">
+                    <button class="btn btn-link text-white p-0 border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="box-shadow: none;">
+                        <i class="bi bi-three-dots fs-5"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark" style="border: 1px solid #262626; background-color: #121212;">
+                        <li>
+                            <form method="POST" action="{% url 'delete_post' post_id=post.id %}" class="delete-post-ajax-form d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="dropdown-item text-danger fw-bold d-flex align-items-center gap-2">
+                                    <i class="bi bi-trash"></i> Delete Post
+                                </button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Post Body / Media -->
+        <div class="post-body position-relative" style="margin: 0 -16px;">
+            {% if post.video %}
+                <div class="post-video-container" style="border-radius: 0; border: none; margin-bottom: 0;">
+                    <video src="{{ post.video.url }}" class="post-video w-100" loop playsinline muted></video>
+                    <button type="button" class="video-audio-toggle">
+                        <i class="bi bi-volume-mute-fill"></i>
+                    </button>
+                    <div class="video-play-indicator">
+                        <i class="bi bi-play-fill"></i>
+                    </div>
+                </div>
+            {% elif post.image %}
+                <img src="{{ post.image.url }}" alt="Post Content" class="w-100 post-image-element" style="max-height: 600px; object-fit: cover; cursor: pointer;">
+            {% endif %}
+            <i class="bi bi-heart-fill double-tap-heart"></i>
+        </div>
+
+        <!-- Post Action Icons Tray -->
+        <div class="post-actions d-flex align-items-center justify-content-between py-3 px-0 border-0 mb-1" style="margin-top: 4px;">
+            <div class="d-flex align-items-center gap-3">
+                <form method="POST" action="{% url 'like_post' post_id=post.id %}" class="d-inline like-ajax-form">
+                    {% csrf_token %}
+                    <button type="submit" class="post-action-btn p-0 {% if post.is_liked_by_user %}liked{% endif %}" style="font-size: 1.4rem;">
+                        <i class="bi {% if post.is_liked_by_user %}bi-heart-fill text-danger{% else %}bi-heart text-white{% endif %}"></i>
+                    </button>
+                </form>
+                
+                <a href="{% url 'post_detail' post_id=post.id %}" class="post-action-btn text-white text-decoration-none" style="font-size: 1.4rem;">
+                    <i class="bi bi-chat"></i>
+                </a>
+            </div>
+
+            <!-- Save Bookmark Icon -->
+            <form method="POST" action="{% url 'toggle_bookmark' post_id=post.id %}" class="bookmark-ajax-form">
+                {% csrf_token %}
+                <button type="submit" class="post-action-btn p-0 {% if post.is_bookmarked_by_user %}saved{% endif %}" style="font-size: 1.4rem;">
+                    <i class="bi {% if post.is_bookmarked_by_user %}bi-bookmark-fill text-warning{% else %}bi-bookmark text-white{% endif %}"></i>
+                </button>
+            </form>
+        </div>
+
+        <!-- Likes Count -->
+        <div class="likes-count-display mb-1">
+            <span class="fw-bold text-white small"><span class="likes-count">{{ post.likes_count }}</span> likes</span>
+        </div>
+
+        <!-- Caption -->
+        {% if post.caption %}
+            <div class="caption-display mb-2 small text-white">
+                <a href="{% url 'user_profile' username=post.user.username %}" class="fw-bold text-white text-decoration-none me-1">{{ post.user.username }}</a>
+                <span>{{ post.caption }}</span>
+            </div>
+        {% endif %}
+
+        <!-- Comments Count -->
+        {% if post.comments_count > 0 %}
+            <div class="comments-link-display mb-2">
+                <a href="{% url 'post_detail' post_id=post.id %}" class="text-muted small text-decoration-none">
+                    View all {{ post.comments_count }} comments
+                </a>
+            </div>
+        {% endif %}
+
+        <!-- Quick Comment Box -->
+        <form method="POST" action="{% url 'comment_post' post_id=post.id %}" class="comment-ajax-form d-flex align-items-center mt-2 border-top border-dark pt-2">
+            {% csrf_token %}
+            <input type="text" name="content" class="form-control form-control-custom bg-transparent border-0 p-0 text-white small" placeholder="Add a comment..." required style="box-shadow: none;">
+            <button type="submit" class="btn btn-link text-primary text-decoration-none fw-bold p-0 ms-2 small">Post</button>
+        </form>
+    </div>
+{% endfor %}

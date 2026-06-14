@@ -1,0 +1,191 @@
+{% extends 'core/base.html' %}
+{% block title %}Reels - Zyra{% endblock %}
+
+{% block content %}
+<div class="reels-container">
+    {% for post in posts %}
+        <div class="reel-card" data-post-id="{{ post.id }}">
+            <div class="reel-video-wrapper">
+                <video src="{{ post.video.url }}" class="reel-video" loop playsinline autoplay muted></video>
+                
+                <!-- Floating Mute Icon -->
+                <button type="button" class="video-audio-toggle" style="top: 20px; right: 20px; bottom: auto;">
+                    <i class="bi bi-volume-mute-fill"></i>
+                </button>
+
+                <!-- Center Play Indicator -->
+                <div class="video-play-indicator">
+                    <i class="bi bi-play-fill"></i>
+                </div>
+
+                <!-- Overlay Info -->
+                <div class="reel-overlay-info">
+                    <div class="d-flex align-items-center mb-3">
+                        <a href="{% url 'user_profile' username=post.user.username %}" class="text-decoration-none">
+                            {% if post.user.profile.profile_pic %}
+                                <img src="{{ post.user.profile.profile_pic.url }}" alt="Avatar" class="rounded-circle border border-2 border-white" style="width: 36px; height: 36px; object-fit: cover;">
+                            {% else %}
+                                <div class="rounded-circle text-white fw-bold d-flex align-items-center justify-content-center" style="width: 36px; height: 36px; font-size: 0.9rem; background: var(--instagram-grad);">
+                                    {{ post.user.username|slice:":1"|upper }}
+                                </div>
+                            {% endif %}
+                        </a>
+                        <a href="{% url 'user_profile' username=post.user.username %}" class="fw-bold text-white text-decoration-none ms-2 small">
+                            {{ post.user.username }}
+                        </a>
+                    </div>
+                    {% if post.caption %}
+                        <p class="small text-white mb-0" style="text-shadow: 0 1px 3px rgba(0,0,0,0.8);">{{ post.caption }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Side Action Buttons -->
+                <div class="reel-sidebar-actions">
+                    <form method="POST" action="{% url 'like_post' post_id=post.id %}" class="like-ajax-form">
+                        {% csrf_token %}
+                        <button type="submit" class="reel-action-btn {% if post.is_liked_by_user %}liked{% endif %}">
+                            <i class="bi {% if post.is_liked_by_user %}bi-heart-fill text-danger{% else %}bi-heart{% endif %}"></i>
+                            <span class="likes-count">{{ post.likes_count }}</span>
+                        </button>
+                    </form>
+                    
+                    <a href="{% url 'post_detail' post_id=post.id %}" class="reel-action-btn text-decoration-none">
+                        <i class="bi bi-chat"></i>
+                        <span>{{ post.comments_count }}</span>
+                    </a>
+
+                    <form method="POST" action="{% url 'toggle_bookmark' post_id=post.id %}" class="bookmark-ajax-form">
+                        {% csrf_token %}
+                        <button type="submit" class="reel-action-btn {% if post.is_bookmarked_by_user %}saved{% endif %}">
+                            <i class="bi {% if post.is_bookmarked_by_user %}bi-bookmark-fill text-warning{% else %}bi-bookmark{% endif %}"></i>
+                            <span>Save</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    {% empty %}
+        <div class="text-center py-5 text-muted">
+            <i class="bi bi-play-btn fs-1 d-block mb-3"></i>
+            <h5>No Reels Yet</h5>
+            <p>Upload a video post to see it featured in Reels!</p>
+        </div>
+    {% endfor %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let globalMuted = true;
+
+    // AJAX Like Handlers
+    document.querySelectorAll('.like-ajax-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const button = this.querySelector('button');
+            const icon = button.querySelector('i');
+            const countSpan = button.querySelector('.likes-count');
+            const url = this.getAttribute('action');
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                countSpan.textContent = data.likes_count;
+                if (data.liked) {
+                    button.classList.add('liked');
+                    icon.className = 'bi bi-heart-fill text-danger';
+                } else {
+                    button.classList.remove('liked');
+                    icon.className = 'bi bi-heart text-white';
+                }
+            });
+        });
+    });
+
+    // AJAX Bookmark Handlers
+    document.querySelectorAll('.bookmark-ajax-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const button = this.querySelector('button');
+            const icon = button.querySelector('i');
+            const url = this.getAttribute('action');
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.bookmarked) {
+                    button.classList.add('saved');
+                    icon.className = 'bi bi-bookmark-fill text-warning';
+                } else {
+                    button.classList.remove('saved');
+                    icon.className = 'bi bi-bookmark text-white';
+                }
+            });
+        });
+    });
+
+    // Video Play/Pause & Mute Toggle
+    const videos = document.querySelectorAll('.reel-video');
+    videos.forEach(video => {
+        const wrapper = video.closest('.reel-video-wrapper');
+        const audioBtn = wrapper.querySelector('.video-audio-toggle');
+        const playIndicator = wrapper.querySelector('.video-play-indicator');
+        const playIcon = playIndicator.querySelector('i');
+
+        video.addEventListener('click', function() {
+            if (video.paused) {
+                video.play();
+                playIcon.className = 'bi bi-play-fill';
+            } else {
+                video.pause();
+                playIcon.className = 'bi bi-pause-fill';
+            }
+            playIndicator.classList.add('show');
+            setTimeout(() => playIndicator.classList.remove('show'), 500);
+        });
+
+        if (audioBtn) {
+            audioBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                globalMuted = !globalMuted;
+                document.querySelectorAll('.reel-video').forEach(v => {
+                    v.muted = globalMuted;
+                    const icon = v.closest('.reel-video-wrapper').querySelector('.video-audio-toggle i');
+                    if (icon) {
+                        icon.className = globalMuted ? 'bi bi-volume-mute-fill' : 'bi bi-volume-up-fill';
+                    }
+                });
+            });
+        }
+    });
+
+    // Autoplay snap logic
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const video = entry.target;
+                if (entry.isIntersecting) {
+                    video.muted = globalMuted;
+                    video.play().catch(err => console.log("Reels autoplay block:", err));
+                } else {
+                    video.pause();
+                }
+            });
+        }, { threshold: 0.8 }); // Trigger when 80% is in viewport
+
+        videos.forEach(video => observer.observe(video));
+    }
+});
+</script>
+{% endblock %}

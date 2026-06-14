@@ -1,0 +1,42 @@
+{% extends 'core/base.html' %}
+{% block title %}Log In - Zyra{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 70vh;">
+    <div class="col-md-5">
+        <div class="glass-card">
+            <div class="text-center mb-4">
+                <i class="bi bi-rocket-takeoff-fill fs-1 text-purple mb-2 d-inline-block" style="background: var(--primary-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent;"></i>
+                <h2 class="text-white fw-bold">Welcome Back</h2>
+                <p class="text-muted">Enter your details to log in to your account</p>
+            </div>
+            
+            <form method="POST" action="{% url 'login' %}">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label for="username" class="form-label text-white fw-medium">Username</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-end-0 border-color text-muted" style="border-radius: 12px 0 0 12px;"><i class="bi bi-person"></i></span>
+                        <input type="text" name="username" id="username" class="form-control form-control-custom border-start-0" placeholder="Enter your username" required style="border-radius: 0 12px 12px 0;">
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <label for="password" class="form-label text-white fw-medium">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-end-0 border-color text-muted" style="border-radius: 12px 0 0 12px;"><i class="bi bi-lock"></i></span>
+                        <input type="password" name="password" id="password" class="form-control form-control-custom border-start-0" placeholder="Enter your password" required style="border-radius: 0 12px 12px 0;">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-grad w-100 py-3 mb-3">Sign In</button>
+            </form>
+            
+            <div class="text-center">
+                <span class="text-muted">Don't have an account? </span>
+                <a href="{% url 'register' %}" class="text-white fw-semibold text-decoration-none">Sign Up</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

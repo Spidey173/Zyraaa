@@ -1,0 +1,261 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Zyra - Social Media{% endblock %}</title>
+    <!-- Bootstrap 5 CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+<body>
+
+    {% if user.is_authenticated %}
+        <!-- Instagram Sidebar (Desktop) -->
+        <aside class="instagram-sidebar">
+            <div>
+                <a class="instagram-logo" href="{% url 'home' %}">ZYRA</a>
+                <ul class="sidebar-menu">
+                    <li class="sidebar-item">
+                        <a href="{% url 'home' %}" class="{% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+                            <i class="bi bi-house-door-fill"></i> <span>Home</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{% url 'explore' %}" class="{% if request.resolver_match.url_name == 'explore' %}active{% endif %}">
+                            <i class="bi bi-search"></i> <span>Search</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{% url 'reels' %}" class="{% if request.resolver_match.url_name == 'reels' %}active{% endif %}">
+                            <i class="bi bi-play-btn"></i> <span>Reels</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="#" id="openCreateModalBtn">
+                            <i class="bi bi-plus-square"></i> <span>Create</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{% url 'notifications' %}" class="{% if request.resolver_match.url_name == 'notifications' %}active{% endif %}">
+                            <i class="bi bi-heart"></i> <span>Notifications</span>
+                        </a>
+                    </li>
+                    <li class="sidebar-item">
+                        <a href="{% url 'user_profile' username=user.username %}" class="{% if request.resolver_match.url_name == 'user_profile' %}active{% endif %}">
+                            <i class="bi bi-person-circle"></i> <span>Profile</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            <div class="sidebar-item">
+                <a href="{% url 'logout' %}" class="text-danger">
+                    <i class="bi bi-box-arrow-right"></i> <span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Instagram Bottom Navigation (Mobile) -->
+        <nav class="instagram-bottom-nav">
+            <a href="{% url 'home' %}" class="bottom-nav-link"><i class="bi bi-house-door-fill"></i></a>
+            <a href="{% url 'explore' %}" class="bottom-nav-link"><i class="bi bi-search"></i></a>
+            <a href="#" class="bottom-nav-link" id="openCreateModalMobileBtn"><i class="bi bi-plus-square"></i></a>
+            <a href="{% url 'reels' %}" class="bottom-nav-link"><i class="bi bi-play-btn"></i></a>
+            <a href="{% url 'user_profile' username=user.username %}" class="bottom-nav-link"><i class="bi bi-person-circle"></i></a>
+        </nav>
+    {% else %}
+        <!-- Simple Top Navbar for unauthenticated users -->
+        <nav class="navbar navbar-expand-lg navbar-dark navbar-custom sticky-top">
+            <div class="container">
+                <a class="navbar-brand navbar-brand-grad" href="{% url 'landing' %}">ZYRA</a>
+                <div class="ms-auto">
+                    <a class="btn btn-outline-custom me-2 text-decoration-none" href="{% url 'login' %}">Log In</a>
+                    <a class="btn btn-grad text-decoration-none" href="{% url 'register' %}">Sign Up</a>
+                </div>
+            </div>
+        </nav>
+    {% endif %}
+
+    <!-- Main Content wrapper -->
+    <div class="{% if user.is_authenticated %}main-content-wrapper{% else %}container py-4 my-2{% endif %}">
+        <!-- Messages System -->
+        {% if messages %}
+            <div class="row justify-content-center">
+                <div class="col-md-8">
+                    {% for message in messages %}
+                        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show glass-card border-0 text-white mb-4" role="alert" style="background: rgba(139, 92, 246, 0.25);">
+                            {{ message }}
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Custom Post Creator Modal -->
+    <div class="custom-modal-backdrop" id="createPostModal">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h5 class="text-white fw-bold m-0">Create new post</h5>
+                <button type="button" class="btn-close btn-close-white" id="closeCreateModalBtn"></button>
+            </div>
+            <div class="custom-modal-body">
+                <form method="POST" enctype="multipart/form-data" action="{% url 'home' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <textarea name="caption" class="form-control form-control-custom" rows="4" placeholder="Write a caption..." required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_modal_image" class="form-label text-white-50 small">Photo</label>
+                        <input type="file" name="image" id="id_modal_image" accept="image/*" class="form-control form-control-custom">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_modal_video" class="form-label text-white-50 small">Video</label>
+                        <input type="file" name="video" id="id_modal_video" accept="video/*" class="form-control form-control-custom">
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <button type="button" class="btn btn-outline-custom" id="cancelCreateModalBtn">Cancel</button>
+                        <button type="submit" class="btn btn-grad px-4">Share</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Story Creator Modal -->
+    <div class="custom-modal-backdrop" id="createStoryModal">
+        <div class="custom-modal-content">
+            <div class="custom-modal-header">
+                <h5 class="text-white fw-bold m-0">Share a Story</h5>
+                <button type="button" class="btn-close btn-close-white" id="closeStoryModalBtn"></button>
+            </div>
+            <div class="custom-modal-body">
+                <form method="POST" enctype="multipart/form-data" action="{% url 'create_story' %}">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="id_story_image" class="form-label text-white-50 small">Photo (Image Story)</label>
+                        <input type="file" name="image" id="id_story_image" accept="image/*" class="form-control form-control-custom">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_story_video" class="form-label text-white-50 small">Video (Video Story)</label>
+                        <input type="file" name="video" id="id_story_video" accept="video/*" class="form-control form-control-custom">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_story_music" class="form-label text-white-50 small">Background Music (MP3 - Optional for Photo Stories)</label>
+                        <input type="file" name="music" id="id_story_music" accept="audio/*" class="form-control form-control-custom">
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_story_caption" class="form-label text-white-50 small">Caption</label>
+                        <input type="text" name="caption" id="id_story_caption" class="form-control form-control-custom" placeholder="Type a story caption...">
+                    </div>
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <button type="button" class="btn btn-outline-custom" id="cancelStoryModalBtn">Cancel</button>
+                        <button type="submit" class="btn btn-grad px-4">Share to Story</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full-screen Story Viewer Overlay -->
+    <div class="story-viewer-backdrop" id="storyViewer">
+        <button class="story-nav-btn story-nav-prev" id="story-prev-btn"><i class="bi bi-chevron-left"></i></button>
+        <button class="story-nav-btn story-nav-next" id="story-next-btn"><i class="bi bi-chevron-right"></i></button>
+        
+        <div class="story-viewer-content">
+            <div class="story-progress-container" id="story-progress-bars">
+                <!-- Dynamically populated -->
+            </div>
+            
+            <div class="story-viewer-header">
+                <div class="d-flex align-items-center">
+                    <img src="" id="story-user-avatar" class="rounded-circle me-2" style="width: 32px; height: 32px; object-fit: cover; border: 1px solid #fff;">
+                    <span class="fw-bold text-white small" id="story-user-name">username</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-link text-white p-0 border-0" id="story-volume-btn" style="box-shadow: none;"><i class="bi bi-volume-mute-fill fs-5"></i></button>
+                    <button type="button" class="btn-close btn-close-white" id="closeStoryViewerBtn" style="font-size: 0.8rem;"></button>
+                </div>
+            </div>
+            
+            <div class="story-media-wrapper">
+                <div id="story-media-container" style="width: 100%; height: 100%;"></div>
+            </div>
+            
+            <div class="story-viewer-caption" id="story-viewer-caption">
+                caption
+            </div>
+
+            <audio id="story-audio-element" style="display: none;"></audio>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // Custom Post Modal Logic
+        const createModal = document.getElementById('createPostModal');
+        const openBtn = document.getElementById('openCreateModalBtn');
+        const openMobileBtn = document.getElementById('openCreateModalMobileBtn');
+        const closeBtn = document.getElementById('closeCreateModalBtn');
+        const cancelBtn = document.getElementById('cancelCreateModalBtn');
+
+        function toggleModal(show) {
+            if (createModal) {
+                createModal.style.display = show ? 'flex' : 'none';
+            }
+        }
+
+        if (openBtn) openBtn.addEventListener('click', (e) => { e.preventDefault(); toggleModal(true); });
+        if (openMobileBtn) openMobileBtn.addEventListener('click', (e) => { e.preventDefault(); toggleModal(true); });
+        if (closeBtn) closeBtn.addEventListener('click', () => toggleModal(false));
+        if (cancelBtn) cancelBtn.addEventListener('click', () => toggleModal(false));
+        if (createModal) {
+            createModal.addEventListener('click', (e) => {
+                if (e.target === createModal) toggleModal(false);
+            });
+        }
+
+        // Custom Story Creator Modal Logic
+        const storyModal = document.getElementById('createStoryModal');
+        const closeStoryBtn = document.getElementById('closeStoryModalBtn');
+        const cancelStoryBtn = document.getElementById('cancelStoryModalBtn');
+
+        function toggleStoryModal(show) {
+            if (storyModal) {
+                storyModal.style.display = show ? 'flex' : 'none';
+            }
+        }
+
+        if (closeStoryBtn) closeStoryBtn.addEventListener('click', () => toggleStoryModal(false));
+        if (cancelStoryBtn) cancelStoryBtn.addEventListener('click', () => toggleStoryModal(false));
+        if (storyModal) {
+            storyModal.addEventListener('click', (e) => {
+                if (e.target === storyModal) toggleStoryModal(false);
+            });
+        }
+    </script>
+</body>
+</html>

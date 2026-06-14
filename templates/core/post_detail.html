@@ -1,0 +1,284 @@
+{% extends 'core/base.html' %}
+{% block title %}Post Detail - Zyra{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <!-- Back Button -->
+        <a href="{% url 'home' %}" class="btn btn-outline-custom mb-4">
+            <i class="bi bi-arrow-left me-1"></i> Back to Feed
+        </a>
+
+        <!-- Detailed Post Card -->
+        <div class="glass-card mb-4">
+            <div class="post-header justify-content-between">
+                <div class="d-flex align-items-center">
+                    <a href="{% url 'user_profile' username=post.user.username %}" class="text-decoration-none">
+                        {% if post.user.profile.profile_pic %}
+                            <img src="{{ post.user.profile.profile_pic.url }}" alt="Avatar" class="post-avatar">
+                        {% else %}
+                            <div class="post-avatar d-flex align-items-center justify-content-center text-white fw-bold" style="background: var(--primary-grad); font-size: 1.1rem; line-height: 1;">
+                                {{ post.user.username|slice:":1"|upper }}
+                            </div>
+                        {% endif %}
+                    </a>
+                    <div>
+                        <a href="{% url 'user_profile' username=post.user.username %}" class="post-author-name">
+                            {{ post.user.username }}
+                        </a>
+                        <div class="post-time">{{ post.created_at|timesince }} ago</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="post-body">
+                {% if post.caption %}
+                    <p class="text-white mb-3" style="font-size: 1.1rem; white-space: pre-wrap;">{{ post.caption }}</p>
+                {% endif %}
+                
+                {% if post.video %}
+                    <div class="post-video-container">
+                        <video src="{{ post.video.url }}" class="post-video" loop playsinline muted></video>
+                        <button type="button" class="video-audio-toggle">
+                            <i class="bi bi-volume-mute-fill"></i>
+                        </button>
+                        <div class="video-play-indicator">
+                            <i class="bi bi-play-fill"></i>
+                        </div>
+                    </div>
+                {% elif post.image %}
+                    <img src="{{ post.image.url }}" alt="Post Content" class="w-100 rounded-3 mb-3 border border-color" style="max-height: 600px; object-fit: contain;">
+                {% endif %}
+            </div>
+
+            <div class="post-actions">
+                <form method="POST" action="{% url 'like_post' post_id=post.id %}" class="d-inline like-ajax-form">
+                    {% csrf_token %}
+                    <button type="submit" class="post-action-btn {% if is_liked %}liked{% endif %}">
+                        <i class="bi {% if is_liked %}bi-heart-fill{% else %}bi-heart{% endif %}"></i>
+                        <span>{{ post.likes_count }} Likes</span>
+                    </button>
+                </form>
+                
+                <span class="post-action-btn text-white-50">
+                    <i class="bi bi-chat-text"></i>
+                    <span class="comments-count">{{ post.comments_count }} Comments</span>
+                </span>
+            </div>
+
+            <!-- Comment Input Form -->
+            <form method="POST" action="{% url 'comment_post' post_id=post.id %}" class="mb-4 comment-ajax-form">
+                {% csrf_token %}
+                <h6 class="text-white fw-bold mb-3">Add a Comment</h6>
+                <div class="input-group">
+                    {{ form.content }}
+                    <button type="submit" class="btn btn-grad">Submit</button>
+                </div>
+            </form>
+
+            <hr class="border-color my-4">
+
+            <!-- Comments List -->
+            <h6 class="text-white fw-bold mb-3">Comments</h6>
+            <div class="comments-section">
+                {% for comment in comments %}
+                    <div class="d-flex mb-3 align-items-start p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color);">
+                        <a href="{% url 'user_profile' username=comment.user.username %}" class="text-decoration-none">
+                            {% if comment.user.profile.profile_pic %}
+                                <img src="{{ comment.user.profile.profile_pic.url }}" alt="Commenter Avatar" class="rounded-circle me-3 border border-purple" style="width: 40px; height: 40px; object-fit: cover;">
+                            {% else %}
+                                <div class="rounded-circle me-3 border border-purple text-white fw-bold d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; font-size: 1.1rem; background: var(--primary-grad);">
+                                    {{ comment.user.username|slice:":1"|upper }}
+                                </div>
+                            {% endif %}
+                        </a>
+                        <div>
+                            <div class="d-flex align-items-center mb-1">
+                                <a href="{% url 'user_profile' username=comment.user.username %}" class="fw-bold text-white text-decoration-none me-2">
+                                    {{ comment.user.username }}
+                                </a>
+                                <span class="text-muted" style="font-size: 0.75rem;">{{ comment.created_at|timesince }} ago</span>
+                            </div>
+                            <p class="text-white-50 m-0" style="white-space: pre-wrap;">{{ comment.content }}</p>
+                        </div>
+                    </div>
+                {% empty %}
+                    <p class="text-muted empty-comments-message">No comments yet. Be the first to comment!</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const escapeHTML = str => str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+
+    // Like AJAX
+    document.querySelectorAll('.like-ajax-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const button = this.querySelector('button');
+            const icon = button.querySelector('i');
+            const countSpan = button.querySelector('span');
+            const url = this.getAttribute('action');
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                countSpan.textContent = data.likes_count + ' Likes';
+                if (data.liked) {
+                    button.classList.add('liked');
+                    icon.classList.remove('bi-heart');
+                    icon.classList.add('bi-heart-fill');
+                } else {
+                    button.classList.remove('liked');
+                    icon.classList.remove('bi-heart-fill');
+                    icon.classList.add('bi-heart');
+                }
+            })
+            .catch(error => console.error('Error with AJAX like:', error));
+        });
+    });
+
+    // Comment AJAX
+    document.querySelectorAll('.comment-ajax-form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const input = this.querySelector('input[name="content"]');
+            const url = this.getAttribute('action');
+            const commentCountSpan = document.querySelector('.comments-count');
+            const commentsSection = document.querySelector('.comments-section');
+            const emptyMessage = document.querySelector('.empty-comments-message');
+            
+            if (!input.value.trim()) return;
+            
+            const formData = new FormData(this);
+            
+            fetch(url, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    input.value = '';
+                    
+                    // Increment count
+                    if (commentCountSpan) {
+                        const currentVal = parseInt(commentCountSpan.textContent) || 0;
+                        commentCountSpan.textContent = (currentVal + 1) + ' Comments';
+                    }
+                    
+                    // Remove empty message if it exists
+                    if (emptyMessage) {
+                        emptyMessage.remove();
+                    }
+                    
+                    // Append new comment
+                    const commentHtml = `
+                        <div class="d-flex mb-3 align-items-start p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); animation: fadeIn 0.4s ease;">
+                            <a href="${data.comment.user_url}" class="text-decoration-none">
+                                ${data.comment.profile_pic ? 
+                                    `<img src="${data.comment.profile_pic}" alt="Commenter Avatar" class="rounded-circle me-3 border border-purple" style="width: 40px; height: 40px; object-fit: cover;">` : 
+                                    `<div class="rounded-circle me-3 border border-purple text-white fw-bold d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; font-size: 1.1rem; background: var(--primary-grad);">
+                                        ${data.comment.username.substring(0, 1).toUpperCase()}
+                                    </div>`
+                                }
+                            </a>
+                            <div>
+                                <div class="d-flex align-items-center mb-1">
+                                    <a href="${data.comment.user_url}" class="fw-bold text-white text-decoration-none me-2">
+                                        ${data.comment.username}
+                                    </a>
+                                    <span class="text-muted" style="font-size: 0.75rem;">${data.comment.created_at}</span>
+                                </div>
+                                <p class="text-white-50 m-0" style="white-space: pre-wrap;">${escapeHTML(data.comment.content)}</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    commentsSection.insertAdjacentHTML('afterbegin', commentHtml);
+                }
+            })
+            .catch(error => console.error('Error with AJAX comment:', error));
+        });
+    });
+
+    // Video Controls & Autoplay (Instagram Style)
+    const videos = document.querySelectorAll('.post-video');
+    let globalMuted = true; // start muted by default
+
+    function syncMuteState(muted) {
+        globalMuted = muted;
+        document.querySelectorAll('.post-video').forEach(vid => {
+            vid.muted = muted;
+            const container = vid.closest('.post-video-container');
+            if (container) {
+                const btnIcon = container.querySelector('.video-audio-toggle i');
+                if (btnIcon) {
+                    if (muted) {
+                        btnIcon.className = 'bi bi-volume-mute-fill';
+                    } else {
+                        btnIcon.className = 'bi bi-volume-up-fill';
+                    }
+                }
+            }
+        });
+    }
+
+    videos.forEach(video => {
+        const container = video.closest('.post-video-container');
+        const audioBtn = container.querySelector('.video-audio-toggle');
+        const playIndicator = container.querySelector('.video-play-indicator');
+        const playIcon = playIndicator.querySelector('i');
+
+        video.addEventListener('click', function() {
+            if (video.paused) {
+                video.play();
+                playIcon.className = 'bi bi-play-fill';
+            } else {
+                video.pause();
+                playIcon.className = 'bi bi-pause-fill';
+            }
+            playIndicator.classList.add('show');
+            setTimeout(() => {
+                playIndicator.classList.remove('show');
+            }, 500);
+        });
+
+        if (audioBtn) {
+            audioBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                syncMuteState(!globalMuted);
+            });
+        }
+    });
+
+    if ('IntersectionObserver' in window) {
+        const videoObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const video = entry.target;
+                if (entry.isIntersecting) {
+                    video.muted = globalMuted;
+                    video.play().catch(err => console.log("Autoplay prevented:", err));
+                } else {
+                    video.pause();
+                }
+            });
+        }, { threshold: 0.6 });
+
+        videos.forEach(video => videoObserver.observe(video));
+    }
+});
+</script>
+{% endblock %}

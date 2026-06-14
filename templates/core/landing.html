@@ -1,0 +1,60 @@
+{% extends 'core/base.html' %}
+{% block title %}Welcome to Zyra - Connect & Share{% endblock %}
+
+{% block content %}
+<div class="row align-items-center py-5">
+    <div class="col-lg-6 text-center text-lg-start">
+        <h1 class="hero-title mb-4">Connect without boundaries.</h1>
+        <p class="hero-subtitle">Zyra is a modern, glassmorphic social space designed for creators, developers, and dreamers. Share your story, inspire others, and stay close to your community.</p>
+        <div class="d-flex gap-3 justify-content-center justify-content-lg-start">
+            <a href="{% url 'register' %}" class="btn-grad btn btn-lg px-4 py-3">Get Started Today</a>
+            <a href="{% url 'login' %}" class="btn-outline-custom btn btn-lg px-4 py-3">Explore Feed</a>
+        </div>
+    </div>
+    <div class="col-lg-6 mt-5 mt-lg-0 text-center">
+        <!-- Visual representation of Zyra using styled glass cards -->
+        <div class="position-relative d-inline-block p-4">
+            <div class="glass-card text-start p-4 mx-auto" style="max-width: 400px; transform: rotate(-3deg); z-index: 2; position: relative;">
+                <div class="d-flex align-items-center mb-3">
+                    <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #a855f7, #ec4899); margin-right: 12px; display: grid; place-items: center; font-weight: 700; color: white;">Z</div>
+                    <div>
+                        <div class="fw-bold text-white">Zyra Team</div>
+                        <div class="text-muted" style="font-size: 0.8rem;">Just now</div>
+                    </div>
+                </div>
+                <p class="text-white mb-3">Welcome to the future of social networking. ✨ Check out our clean design and rich interactions.</p>
+                <div class="post-actions border-0 m-0 p-0">
+                    <span class="text-pink"><i class="bi bi-heart-fill me-1 text-danger"></i> 1,420 Likes</span>
+                    <span class="text-muted ms-3"><i class="bi bi-chat-text me-1"></i> 89 Comments</span>
+                </div>
+            </div>
+            <!-- Decorative gradient blur background -->
+            <div class="position-absolute top-50 start-50 translate-middle" style="width: 300px; height: 300px; background: radial-gradient(circle, rgba(217, 70, 239, 0.4) 0%, transparent 70%); filter: blur(20px); z-index: 1;"></div>
+        </div>
+    </div>
+</div>
+
+<div class="row features-grid text-center py-5">
+    <div class="col-md-4 mb-4">
+        <div class="glass-card h-100">
+            <div class="fs-1 text-purple mb-3"><i class="bi bi-image"></i></div>
+            <h3 class="h4 text-white">Visual Feed</h3>
+            <p class="text-muted">Publish striking post captions paired with beautiful imagery uploads to keep your followers engaged.</p>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="glass-card h-100">
+            <div class="fs-1 text-pink mb-3"><i class="bi bi-heart"></i></div>
+            <h3 class="h4 text-white">Instant Interactions</h3>
+            <p class="text-muted">Like and comment on posts with responsive transitions. Keep track of what matters to you.</p>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="glass-card h-100">
+            <div class="fs-1 text-cyan mb-3"><i class="bi bi-people"></i></div>
+            <h3 class="h4 text-white">Social Graph</h3>
+            <p class="text-muted">Follow and discover other community members to curate a custom homepage feed experience.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
