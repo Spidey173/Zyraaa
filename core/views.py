@@ -1,5 +1,3 @@
-import logging
-logger = logging.getLogger(__name__)
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
@@ -53,92 +51,53 @@ def logout_view(request):
 
 @login_required
 def home(request):
-    from .redis_utils import get_cached_feed, check_rate_limit, RedisKeys, redis_client
-    
-    # Rate Limiting check
-    if not check_rate_limit(request.user.id, limit=60, prefix="home_feed"):
-        return JsonResponse({'error': 'Rate limit exceeded. Please wait a minute.'}, status=429)
-
     if request.method == 'POST':
         form = PostForm(request.POST, request.FILES)
         if form.is_valid():
             post = form.save(commit=False)
             post.user = request.user
-            
-            # Map files if direct upload was bypassed (e.g., in unit tests)
-            if not post.image_url and form.cleaned_data.get('image'):
-                post.image = form.cleaned_data.get('image')
-            if not post.video_url and form.cleaned_data.get('video'):
-                post.video = form.cleaned_data.get('video')
-                
             post.save()
-            
-            # Asynchronously fan out the new post to followers
-            from .tasks import fanout_new_post_task
-            fanout_new_post_task.delay(post.id)
-            
             messages.success(request, "Post published successfully!")
             return redirect('home')
     else:
         form = PostForm()
 
-    page = request.GET.get('page', '1')
-    try:
-        page = int(page)
-    except ValueError:
-        page = 1
-
-    post_ids = get_cached_feed(request.user.id, page=page, page_size=5)
-    
-    if post_ids:
-        posts_dict = {p.id: p for p in Post.objects.filter(id__in=post_ids).select_related('user', 'user__profile').prefetch_related('likes', 'comments')}
-        posts_list = [posts_dict[pid] for pid in post_ids if pid in posts_dict]
-    else:
-        # Fallback
-        followed_users = Follow.objects.filter(follower=request.user).values_list('following', flat=True)
-        posts_query = Post.objects.filter(
-            Q(user__in=followed_users) | Q(user=request.user)
-        ).select_related('user', 'user__profile').prefetch_related('likes', 'comments')
-        
-        if not posts_query.exists():
-            posts_query = Post.objects.all().select_related('user', 'user__profile').prefetch_related('likes', 'comments')
-            
-        from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-        paginator = Paginator(posts_query, 5)
-        try:
-            posts_list = paginator.page(page).object_list
-        except (EmptyPage, PageNotAnInteger):
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({'posts_html': ''})
-            posts_list = []
-            
-        # Write first page to cache safely
-        from .redis_utils import REDIS_AVAILABLE
-        if page == 1 and REDIS_AVAILABLE and redis_client:
-            try:
-                pipeline = redis_client.pipeline()
-                feed_key = RedisKeys.feed(request.user.id)
-                for p in posts_query[:100]:
-                    pipeline.zadd(feed_key, {p.id: p.created_at.timestamp()})
-                pipeline.execute()
-            except Exception as e:
-                logger.warning(f"Failed to populate feed cache in Redis: {e}")
-
-    # Add interactive flags for template compatibility
-    post_ids_list = [post.id for post in posts_list]
-    liked_post_ids = set(Like.objects.filter(user=request.user, post_id__in=post_ids_list).values_list('post_id', flat=True))
-    bookmarked_post_ids = set(Bookmark.objects.filter(user=request.user, post_id__in=post_ids_list).values_list('post_id', flat=True))
-    for post in posts_list:
-        post.is_liked_by_user = post.id in liked_post_ids
-        post.is_bookmarked_by_user = post.id in bookmarked_post_ids
-
-    # Dynamic suggestions
+    # Get users we follow
     followed_users = Follow.objects.filter(follower=request.user).values_list('following', flat=True)
+    
+    # Query feed posts (own posts + followed users' posts) using select_related
+    posts = Post.objects.filter(
+        Q(user__in=followed_users) | Q(user=request.user)
+    ).select_related('user', 'user__profile').prefetch_related('likes', 'comments')
+
+    # If the feed is empty, show all posts to make the platform feel alive and active
+    if not posts.exists():
+        posts = Post.objects.all().select_related('user', 'user__profile').prefetch_related('likes', 'comments')
+
+    # Pagination for Infinite Scroll (5 posts per page)
+    from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+    paginator = Paginator(posts, 5)
+    page = request.GET.get('page')
+    try:
+        posts_page = paginator.page(page)
+    except PageNotAnInteger:
+        posts_page = paginator.page(1)
+    except EmptyPage:
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'posts_html': ''})
+        posts_page = paginator.page(paginator.num_pages)
+
+    # Add interactive flags for frontend rendering
+    for post in posts_page:
+        post.is_liked_by_user = post.likes.filter(user=request.user).exists()
+        post.is_bookmarked_by_user = Bookmark.objects.filter(user=request.user, post=post).exists()
+
+    # Dynamic suggestions: users not followed and not self
     suggested_users = User.objects.exclude(
         id__in=followed_users
     ).exclude(id=request.user.id).select_related('profile')[:5]
 
-    # Real Stories logic
+    # Real Stories logic: Active stories in the last 24h
     import datetime
     from django.utils import timezone
     from collections import defaultdict
@@ -172,12 +131,13 @@ def home(request):
             'stories': user_stories
         })
 
+    # If AJAX scroll request, render the partial list of post cards
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return render(request, 'core/post_list_partial.html', {'posts': posts_list})
+        return render(request, 'core/post_list_partial.html', {'posts': posts_page})
 
     context = {
         'form': form,
-        'posts': posts_list,
+        'posts': posts_page,
         'suggested_users': suggested_users,
         'story_users': story_bubbles,
         'story_bubbles_json': json.dumps(story_bubbles_json),
@@ -215,32 +175,16 @@ def like_post(request, post_id):
     if request.method == 'POST':
         post = get_object_or_404(Post, id=post_id)
         like, created = Like.objects.get_or_create(user=request.user, post=post)
-        
-        from .redis_utils import increment_like_count
         if not created:
             like.delete() # Unlike if already liked
             liked = False
-            increment_like_count(post.id, -1)
         else:
             liked = True
-            increment_like_count(post.id, 1)
-            # Create Activity notification via Celery
+            # Create Activity notification
             if post.user != request.user:
-                from .tasks import create_notification_task
-                create_notification_task.delay(request.user.id, post.user.id, 'like', post.id)
-        
-        # Real-time Channels broadcast
-        from channels.layers import get_channel_layer
-        from asgiref.sync import async_to_sync
-        channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                f"post_likes_{post.id}",
-                {
-                    "type": "send_like_update",
-                    "likes_count": post.likes_count
-                }
-            )
+                Notification.objects.get_or_create(
+                    sender=request.user, receiver=post.user, post=post, notification_type='like'
+                )
         
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({
@@ -264,10 +208,11 @@ def comment_post(request, post_id):
             comment.post = post
             comment.save()
             
-            # Create Activity notification via Celery
+            # Create Activity notification
             if post.user != request.user:
-                from .tasks import create_notification_task
-                create_notification_task.delay(request.user.id, post.user.id, 'comment', post.id)
+                Notification.objects.create(
+                    sender=request.user, receiver=post.user, post=post, notification_type='comment'
+                )
             
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 profile_pic_url = comment.user.profile.profile_pic.url if comment.user.profile.profile_pic else None
@@ -308,10 +253,7 @@ def user_profile(request, username):
         if request.method == 'POST':
             profile_form = UserProfileForm(request.POST, request.FILES, instance=profile_user.profile)
             if profile_form.is_valid():
-                profile = profile_form.save(commit=False)
-                if not profile.profile_pic_url and profile_form.cleaned_data.get('profile_pic'):
-                    profile.profile_pic = profile_form.cleaned_data.get('profile_pic')
-                profile.save()
+                profile_form.save()
                 messages.success(request, "Profile updated successfully!")
                 return redirect('user_profile', username=username)
         else:
@@ -319,20 +261,14 @@ def user_profile(request, username):
 
     saved_posts = []
     if is_self:
-        saved_posts = list(Post.objects.filter(bookmarks__user=profile_user).select_related('user', 'user__profile').prefetch_related('likes', 'comments'))
-        saved_post_ids = [post.id for post in saved_posts]
-        liked_saved_ids = set(Like.objects.filter(user=request.user, post_id__in=saved_post_ids).values_list('post_id', flat=True))
+        saved_posts = Post.objects.filter(bookmarks__user=profile_user).select_related('user', 'user__profile').prefetch_related('likes', 'comments')
         for post in saved_posts:
-            post.is_liked_by_user = post.id in liked_saved_ids
+            post.is_liked_by_user = post.likes.filter(user=request.user).exists()
             post.is_bookmarked_by_user = True
 
-    posts = list(posts)
-    post_ids = [post.id for post in posts]
-    liked_post_ids = set(Like.objects.filter(user=request.user, post_id__in=post_ids).values_list('post_id', flat=True))
-    bookmarked_post_ids = set(Bookmark.objects.filter(user=request.user, post_id__in=post_ids).values_list('post_id', flat=True))
     for post in posts:
-        post.is_liked_by_user = post.id in liked_post_ids
-        post.is_bookmarked_by_user = post.id in bookmarked_post_ids
+        post.is_liked_by_user = post.likes.filter(user=request.user).exists()
+        post.is_bookmarked_by_user = Bookmark.objects.filter(user=request.user, post=post).exists()
 
     context = {
         'profile_user': profile_user,
@@ -351,18 +287,15 @@ def follow_user(request, username):
         is_following = False
         if target_user != request.user:
             follow, created = Follow.objects.get_or_create(follower=request.user, following=target_user)
-            
-            from .redis_utils import increment_follower_stats
             if not created:
                 follow.delete() # Unfollow
                 is_following = False
-                increment_follower_stats(request.user.id, target_user.id, -1)
             else:
                 is_following = True
-                increment_follower_stats(request.user.id, target_user.id, 1)
-                # Create Activity notification via Celery
-                from .tasks import create_notification_task
-                create_notification_task.delay(request.user.id, target_user.id, 'follow')
+                # Create Activity notification
+                Notification.objects.get_or_create(
+                    sender=request.user, receiver=target_user, notification_type='follow'
+                )
         
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({
@@ -383,11 +316,8 @@ def followers_list(request, username):
     followers = Follow.objects.filter(following=profile_user).select_related('follower', 'follower__profile')
     
     # Check follow state for each follower from current user perspective
-    followers = list(followers)
-    follower_users = [follow.follower for follow in followers]
-    followed_user_ids = set(Follow.objects.filter(follower=request.user, following__in=follower_users).values_list('following_id', flat=True))
     for follow in followers:
-        follow.follower.is_followed_by_user = follow.follower.id in followed_user_ids
+        follow.follower.is_followed_by_user = Follow.objects.filter(follower=request.user, following=follow.follower).exists()
         
     context = {
         'profile_user': profile_user,
@@ -401,11 +331,8 @@ def following_list(request, username):
     following_relations = Follow.objects.filter(follower=profile_user).select_related('following', 'following__profile')
     
     # Check follow state for each following user from current user perspective
-    following_relations = list(following_relations)
-    following_users = [relation.following for relation in following_relations]
-    followed_user_ids = set(Follow.objects.filter(follower=request.user, following__in=following_users).values_list('following_id', flat=True))
     for relation in following_relations:
-        relation.following.is_followed_by_user = relation.following.id in followed_user_ids
+        relation.following.is_followed_by_user = Follow.objects.filter(follower=request.user, following=relation.following).exists()
         
     context = {
         'profile_user': profile_user,
@@ -428,26 +355,19 @@ def explore_view(request):
             caption__icontains=query
         ).select_related('user', 'user__profile').prefetch_related('likes', 'comments')
         
-        users_results = list(users_results)
-        followed_user_ids = set(Follow.objects.filter(follower=request.user, following__in=users_results).values_list('following_id', flat=True))
         for u in users_results:
-            u.is_followed_by_user = u.id in followed_user_ids
+            u.is_followed_by_user = Follow.objects.filter(follower=request.user, following=u).exists()
             
-        posts_results = list(posts_results)
-        post_ids = [post.id for post in posts_results]
-        liked_post_ids = set(Like.objects.filter(user=request.user, post_id__in=post_ids).values_list('post_id', flat=True))
         for post in posts_results:
-            post.is_liked_by_user = post.id in liked_post_ids
+            post.is_liked_by_user = post.likes.filter(user=request.user).exists()
     else:
         from django.db.models import Count
-        posts_results = list(Post.objects.annotate(
+        posts_results = Post.objects.annotate(
             num_likes=Count('likes')
-        ).order_by('-num_likes', '-created_at').select_related('user', 'user__profile').prefetch_related('likes', 'comments'))
+        ).order_by('-num_likes', '-created_at').select_related('user', 'user__profile').prefetch_related('likes', 'comments')
         
-        post_ids = [post.id for post in posts_results]
-        liked_post_ids = set(Like.objects.filter(user=request.user, post_id__in=post_ids).values_list('post_id', flat=True))
         for post in posts_results:
-            post.is_liked_by_user = post.id in liked_post_ids
+            post.is_liked_by_user = post.likes.filter(user=request.user).exists()
 
     context = {
         'query': query,
@@ -459,14 +379,10 @@ def explore_view(request):
 @login_required
 def reels_view(request):
     # Filter posts that have a video file
-    reels = Post.objects.exclude(video_url='').exclude(video_url__isnull=True).select_related('user', 'user__profile').prefetch_related('likes', 'comments')
-    reels = list(reels)
-    post_ids = [post.id for post in reels]
-    liked_post_ids = set(Like.objects.filter(user=request.user, post_id__in=post_ids).values_list('post_id', flat=True))
-    bookmarked_post_ids = set(Bookmark.objects.filter(user=request.user, post_id__in=post_ids).values_list('post_id', flat=True))
+    reels = Post.objects.exclude(video='').exclude(video__isnull=True).select_related('user', 'user__profile').prefetch_related('likes', 'comments')
     for post in reels:
-        post.is_liked_by_user = post.id in liked_post_ids
-        post.is_bookmarked_by_user = post.id in bookmarked_post_ids
+        post.is_liked_by_user = post.likes.filter(user=request.user).exists()
+        post.is_bookmarked_by_user = Bookmark.objects.filter(user=request.user, post=post).exists()
     return render(request, 'core/reels.html', {'posts': reels})
 
 @login_required
@@ -489,16 +405,8 @@ def toggle_bookmark(request, post_id):
 @login_required
 def notifications_view(request):
     notifications = request.user.notifications.all().select_related('sender', 'sender__profile', 'post')
+    # Mark all notifications as read when visiting
     notifications.update(is_read=True)
-    
-    # Reset unread count in Redis safely
-    from .redis_utils import redis_client, RedisKeys, REDIS_AVAILABLE
-    if REDIS_AVAILABLE and redis_client:
-        try:
-            redis_client.delete(RedisKeys.unread_notifications(request.user.id))
-        except Exception as e:
-            logger.warning(f"Failed to reset notification count in Redis: {e}")
-    
     return render(request, 'core/notifications.html', {'notifications': notifications})
 
 @login_required
@@ -519,65 +427,20 @@ def delete_post(request, post_id):
 @login_required
 def create_story_view(request):
     if request.method == 'POST':
-        image_url = request.POST.get('cloudinary_image_url')
-        video_url = request.POST.get('cloudinary_video_url')
-        music_url = request.POST.get('cloudinary_music_url')
-        
-        image_file = request.FILES.get('image')
-        video_file = request.FILES.get('video')
-        music_file = request.FILES.get('music')
+        image = request.FILES.get('image')
+        video = request.FILES.get('video')
+        music = request.FILES.get('music')
         caption = request.POST.get('caption', '')
         
-        if image_url or video_url or image_file or video_file:
-            story = Story.objects.create(
+        if image or video:
+            Story.objects.create(
                 user=request.user,
+                image=image,
+                video=video,
+                music=music,
                 caption=caption
             )
-            
-            if image_url:
-                story.image_url = image_url
-            elif image_file:
-                story.image = image_file
-                
-            if video_url:
-                story.video_url = video_url
-            elif video_file:
-                story.video = video_file
-                
-            if music_url:
-                story.music_url = music_url
-            elif music_file:
-                story.music = music_file
-                
-            story.save()
             messages.success(request, "Story shared successfully!")
         else:
             messages.error(request, "You must upload either a photo or video to share a story.")
     return redirect('home')
-
-import time
-import cloudinary.utils
-
-@login_required
-def get_cloudinary_signature(request):
-    """
-    Returns secure credentials for client-side direct uploading to Cloudinary.
-    """
-    timestamp = int(time.time())
-    params = {
-        'timestamp': timestamp,
-        'folder': 'zyra_uploads',
-    }
-    
-    signature = cloudinary.utils.api_sign_request(
-        params,
-        cloudinary.config().api_secret
-    )
-    
-    return JsonResponse({
-        'signature': signature,
-        'timestamp': timestamp,
-        'api_key': cloudinary.config().api_key,
-        'cloud_name': cloudinary.config().cloud_name,
-        'folder': 'zyra_uploads',
-    })

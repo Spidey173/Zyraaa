@@ -11,28 +11,15 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
-import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Load environment variables from .env file if it exists
-env_path = BASE_DIR / '.env'
-if env_path.exists():
-    with open(env_path) as f:
-        for line in f:
-            line = line.strip()
-            if line and not line.startswith('#'):
-                try:
-                    key, val = line.split('=', 1)
-                    os.environ.setdefault(key.strip(), val.strip())
-                except ValueError:
-                    pass
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
+import os
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-k8=@=2to@w1o4sp!jaqt)bs5(o%$%xbprl0f@5%9q%253xg087')
@@ -42,26 +29,16 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*']
 
-# CSRF Trusted Origins for Render and HTTPS deployments
-CSRF_TRUSTED_ORIGINS = [
-    'https://*.onrender.com',
-]
-CSRF_TRUSTED_ORIGINS_ENV = os.environ.get('CSRF_TRUSTED_ORIGINS')
-if CSRF_TRUSTED_ORIGINS_ENV:
-    CSRF_TRUSTED_ORIGINS.extend(CSRF_TRUSTED_ORIGINS_ENV.split(','))
-
 
 # Application definition
 
 INSTALLED_APPS = [
-    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'channels',
     'cloudinary_storage',
     'core',
     'cloudinary',
@@ -97,7 +74,6 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'config.wsgi.application'
-ASGI_APPLICATION = 'config.asgi.application'
 
 
 # Database
@@ -180,78 +156,4 @@ CLOUDINARY_STORAGE = {
     'CLOUD_NAME': os.environ.get('CLOUDINARY_CLOUD_NAME'),
     'API_KEY': os.environ.get('CLOUDINARY_API_KEY'),
     'API_SECRET': os.environ.get('CLOUDINARY_API_SECRET'),
-}
-
-# Redis Cache and Session Backend
-import sys
-IS_TESTING = 'test' in sys.argv
-
-if IS_TESTING:
-    CACHES = {
-        "default": {
-            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-            "LOCATION": "zyra-test-cache",
-        }
-    }
-    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-    SESSION_CACHE_ALIAS = "default"
-    CHANNEL_LAYERS = {
-        "default": {
-            "BACKEND": "channels.layers.InMemoryChannelLayer",
-        },
-    }
-    CELERY_TASK_ALWAYS_EAGER = True
-else:
-    REDIS_URL = os.environ.get('REDIS_URL')
-    if REDIS_URL:
-        CACHES = {
-            "default": {
-                "BACKEND": "django.core.cache.backends.redis.RedisCache",
-                "LOCATION": REDIS_URL,
-            }
-        }
-        SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-        SESSION_CACHE_ALIAS = "default"
-        CHANNEL_LAYERS = {
-            'default': {
-                'BACKEND': 'channels_redis.core.RedisChannelLayer',
-                'CONFIG': {
-                    "hosts": [REDIS_URL],
-                },
-            },
-        }
-    else:
-        # Fallback to local memory cache and database sessions if Redis is not configured in production
-        CACHES = {
-            "default": {
-                "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-                "LOCATION": "zyra-production-fallback-cache",
-            }
-        }
-        SESSION_ENGINE = "django.contrib.sessions.backends.db"
-        CHANNEL_LAYERS = {
-            "default": {
-                "BACKEND": "channels.layers.InMemoryChannelLayer",
-            },
-        }
-
-# Celery Configuration
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
-
-# Celery Beat Schedule
-from celery.schedules import crontab
-CELERY_BEAT_SCHEDULE = {
-    'cleanup-expired-stories-every-hour': {
-        'task': 'core.tasks.cleanup_expired_stories_task',
-        'schedule': crontab(minute=0),
-    },
-    'prune-expired-presence-every-15-seconds': {
-        'task': 'core.tasks.prune_presence_task',
-        'schedule': 15.0,
-    },
 }
